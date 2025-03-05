@@ -10,11 +10,11 @@ import dotenv
 dotenv.load_dotenv()
 
 # Page configuration
-st.set_page_config(page_title="RAG Knowledge Assistant", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="UDST Policy Assistant", page_icon="🧠", layout="wide")
 
 # Initialize session state
 if 'api_key' not in st.session_state:
-    st.session_state.api_key = os.getenv("MISTRAL_API_KEY", "")
+    st.session_state.api_key = os.getenv("MISTRAL_API_KEY", "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
 if 'chunks' not in st.session_state:
     st.session_state.chunks = []
 if 'sources' not in st.session_state:
@@ -96,8 +96,8 @@ def main():
     display_sidebar()
     load_existing_index()
 
-    st.markdown("# 🧠 RAG Knowledge Assistant")
-    st.markdown("Welcome to the RAG Knowledge Assistant! Ask questions below.")
+    st.markdown("# 🧠 UDST Policy Assistant")
+    st.markdown("Welcome to the UDST Policy Assistant! Ask questions below about university policies.")
 
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
