@@ -55,9 +55,15 @@ def mistral_answer(query, context):
     Answer:
     """
     client = Mistral(api_key=api_key)
-    messages = [{"role": "user", "content": prompt}]
-    chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
+
+    # Use Mistral's API format properly
+    chat_response = client.chat.completions.create(
+        model="mistral-large-latest",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
     return chat_response.choices[0].message.content
+
 
 # Streamlit Interface
 def streamlit_app():
