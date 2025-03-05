@@ -91,6 +91,21 @@ def display_sidebar():
         if st.button("🗑️ Clear Chat History"):
             st.session_state.chat_history = []
             st.rerun()
+def mistral_answer(query, context):
+    client = Mistral(api_key=st.session_state.api_key)
+    prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+    messages = [UserMessage(content=prompt)]
+    try:
+        chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
+        return chat_response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
+
+# Example usage in the main code
+query = "What is the annual leave policy?"
+context = "Relevant context retrieved from the knowledge base."
+answer = mistral_answer(query, context)
+st.markdown(answer)
 
 def main():
     display_sidebar()
