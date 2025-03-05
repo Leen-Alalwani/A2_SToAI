@@ -3,104 +3,86 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
-from mistralai import Mistral
 import faiss
+from mistralai import Mistral
 
-# Set up your Mistral API key
-api_key = "Use Your Own Key"
-os.environ["MISTRAL_API_KEY"] = api_key
+# Set up Mistral API key
+api_key = os.getenv("MISTRAL_API_KEY", "Use Your Own Key")
 
-# Fetching and parsing policy data
+# Function to fetch and parse policy text
 def fetch_policy_data(url):
     response = requests.get(url)
-    html_doc = response.text
-    soup = BeautifulSoup(html_doc, "html.parser")
+    soup = BeautifulSoup(response.text, "html.parser")
     tag = soup.find("div")
-    text = tag.text.strip() if tag else "Policy content not found."
-    return text
+    return tag.text.strip() if tag else "Policy content not found."
 
-# Chunking function to break text into smaller parts
+# Function to chunk text
 def chunk_text(text, chunk_size=512):
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
-# Get embeddings for text chunks
+# Get embeddings
 def get_text_embedding(list_txt_chunks):
     client = Mistral(api_key=api_key)
-    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
-    return embeddings_batch_response.data
+    embeddings_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
+    return [e.embedding for e in embeddings_response.data]
 
-# Initialize FAISS index
+# Create FAISS index
 def create_faiss_index(embeddings):
-    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
-    d = embedding_vectors.shape[1]  # embedding size
+    if not embeddings:
+        return None  # Prevent crashes if no embeddings
+    d = len(embeddings[0])
     index = faiss.IndexFlatL2(d)
-    faiss_index = faiss.IndexIDMap(index)
-    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
-    return faiss_index
+    index.add(np.array(embeddings))
+    return index
 
-# Search for relevant chunks
+# Retrieve relevant chunks
 def search_relevant_chunks(faiss_index, query_embedding, k=2):
+    if not faiss_index:
+        return []  # Handle missing index
     D, I = faiss_index.search(query_embedding, k)
-    return I
+    return I[0]
 
-# Generate answer from Mistral
+# Generate AI response
 def mistral_answer(query, context):
     prompt = f"""
-    Context information is below.
-    ---------------------
+    Context:
     {context}
-    ---------------------
-    Given the context information and not prior knowledge, answer the query.
-    Query: {query}
-    Answer:
+    
+    Given the context, answer the query:
+    {query}
     """
     client = Mistral(api_key=api_key)
-    messages = [{"role": "user", "content": prompt}]
-    chat_response = client.chat.completions.create(
-        model="mistral-large-latest",
-        messages=messages
-    )
-    return chat_response.choices[0].message.content
+    response = client.chat.complete(model="mistral-large-latest", messages=[{"role": "user", "content": prompt}])
+    return response.choices[0].message.content
 
-# Streamlit Interface
+# Streamlit App
 def streamlit_app():
-    st.title('UDST Policies Q&A')
+    st.title("UDST Policy Chatbot")
 
     policies = [
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-procedure",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members-retention-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy"
     ]
 
-    selected_policy_url = st.selectbox('Select a Policy', policies)
-    
-    # Fetch policy data and chunk it
+    selected_policy_url = st.selectbox("Select a Policy", policies)
     policy_text = fetch_policy_data(selected_policy_url)
     chunks = chunk_text(policy_text)
-    
-    # Generate embeddings for the chunks and create a FAISS index
+
+    if not chunks:
+        st.error("No policy data available.")
+        return
+
     embeddings = get_text_embedding(chunks)
     faiss_index = create_faiss_index(embeddings)
-    
-    # Input box for query
-    query = st.text_input("Enter your Query:")
-    
+    query = st.text_input("Enter your question:")
+
     if query:
-        query_embedding = np.array([get_text_embedding([query])[0].embedding])
-        I = search_relevant_chunks(faiss_index, query_embedding, k=2)
-        retrieved_chunks = [chunks[i] for i in I.tolist()[0]]
-        context = " ".join(retrieved_chunks)
-        
-        answer = mistral_answer(query, context)
-        
+        query_embedding = np.array([get_text_embedding([query])[0]])
+        indices = search_relevant_chunks(faiss_index, query_embedding)
+        context = " ".join([chunks[i] for i in indices]) if indices else "No relevant context found."
+        answer = mistral_answer(query, context) if context else "I couldn't find relevant information."
         st.text_area("Answer:", answer, height=200)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     streamlit_app()
