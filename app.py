@@ -7,7 +7,7 @@ from mistralai import Mistral
 import faiss
 
 # Set up your Mistral API key
-api_key = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
+api_key = "Use Your Own Key"
 os.environ["MISTRAL_API_KEY"] = api_key
 
 # Fetching and parsing policy data
@@ -55,15 +55,12 @@ def mistral_answer(query, context):
     Answer:
     """
     client = Mistral(api_key=api_key)
-
-    # Use Mistral's API format properly
+    messages = [{"role": "user", "content": prompt}]
     chat_response = client.chat.completions.create(
         model="mistral-large-latest",
-        messages=[{"role": "user", "content": prompt}]
+        messages=messages
     )
-    
     return chat_response.choices[0].message.content
-
 
 # Streamlit Interface
 def streamlit_app():
@@ -107,4 +104,3 @@ def streamlit_app():
 
 if __name__ == '__main__':
     streamlit_app()
-
