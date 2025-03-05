@@ -3,101 +3,116 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
-import faiss
 from mistralai import Mistral
+import faiss
 
-# Set up Mistral API key
-api_key = os.getenv("MISTRAL_API_KEY", "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
+# Set up your Mistral API key
+api_key = "liU22SqhcuY6W5ckIPxOzcm4yro1CJLX"
+os.environ["MISTRAL_API_KEY"] = api_key
 
-# Function to fetch and parse policy text
+# Fetching and parsing policy data
 def fetch_policy_data(url):
     response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
+    html_doc = response.text
+    soup = BeautifulSoup(html_doc, "html.parser")
     tag = soup.find("div")
-    return tag.text.strip() if tag else "Policy content not found."
+    text = tag.text.strip()
+    return text
 
-# Function to chunk text
+# Chunking function to break text into smaller parts
 def chunk_text(text, chunk_size=512):
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
-# Get embeddings
+# Get embeddings for text chunks
 def get_text_embedding(list_txt_chunks):
     client = Mistral(api_key=api_key)
-    try:
-        embeddings_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
-        return [e.embedding for e in embeddings_response.data]
-    except Exception as e:
-        st.error(f"Embedding API Error: {str(e)}")
-        return []
+    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
+    return embeddings_batch_response.data
 
-# Create FAISS index
+# Initialize FAISS index
 def create_faiss_index(embeddings):
-    if not embeddings:
-        return None  # Prevent crashes if no embeddings
-    d = len(embeddings[0])
+    # Convert the embeddings to a 2D NumPy array
+    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
+    
+    # Ensure the shape is (num_embeddings, embedding_size)
+    d = embedding_vectors.shape[1]  # embedding size (dimensionality)
+    
+    # Create the FAISS index and add the embeddings
     index = faiss.IndexFlatL2(d)
-    index.add(np.array(embeddings))
-    return index
+    faiss_index = faiss.IndexIDMap(index)
+    
+    # Add the embeddings with an id for each (FAISS requires ids)
+    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
+    
+    return faiss_index
 
-# Retrieve relevant chunks
+
+# Search for the most relevant chunks based on query embedding
 def search_relevant_chunks(faiss_index, query_embedding, k=2):
-    if not faiss_index:
-        return []  # Handle missing index
     D, I = faiss_index.search(query_embedding, k)
-    return I[0]
+    return I
 
-# Generate AI response
+# Mistral model to generate answers based on context
 def mistral_answer(query, context):
     prompt = f"""
-    Context:
+    Context information is below.
+    ---------------------
     {context}
-    
-    Given the context, answer the query:
-    {query}
+    ---------------------
+    Given the context information and not prior knowledge, answer the query.
+    Query: {query}
+    Answer:
     """
     client = Mistral(api_key=api_key)
-    try:
-        response = client.chat.complete(
-            model="mistral-large-latest",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Mistral API Error: {str(e)}")
-        return "Error generating response. Please try again later."
+    messages = [{"role": "user", "content": prompt}]
+    chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
+    return chat_response.choices[0].message.content
 
-# Streamlit App
+# Streamlit Interface
 def streamlit_app():
-    st.title("UDST Policy Chatbot")
+    st.title('UDST Policies Q&A')
 
+    # Select a policy from a list of 10 policies (example URLs)
+# Select a policy from a list of 10 policies (updated URLs)
     policies = [
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy"
-    ]
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-procedure",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members%E2%80%99-retention-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
+    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"
+]
 
-    selected_policy_url = st.selectbox("Select a Policy", policies)
+    selected_policy_url = st.selectbox('Select a Policy', policies)
+    
+    # Fetch policy data and chunk it
     policy_text = fetch_policy_data(selected_policy_url)
     chunks = chunk_text(policy_text)
-
-    if not chunks:
-        st.error("No policy data available.")
-        return
-
+    
+    # Generate embeddings for the chunks and create a FAISS index
     embeddings = get_text_embedding(chunks)
     faiss_index = create_faiss_index(embeddings)
-    query = st.text_input("Enter your question:")
-
+    
+    # Input box for query
+    query = st.text_input("Enter your Query:")
+    
     if query:
-        query_embeddings = get_text_embedding([query])
-        if not query_embeddings:
-            st.error("Failed to generate query embeddings. Please try again later.")
-            return
-        query_embedding = np.array([query_embeddings[0]])
-        indices = search_relevant_chunks(faiss_index, query_embedding)
-        context = " ".join([chunks[i] for i in indices]) if indices else "No relevant context found."
-        answer = mistral_answer(query, context) if context else "I couldn't find relevant information."
+        # Embed the user query and search for relevant chunks
+        query_embedding = np.array([get_text_embedding([query])[0].embedding])
+        I = search_relevant_chunks(faiss_index, query_embedding, k=2)
+        retrieved_chunks = [chunks[i] for i in I.tolist()[0]]
+        context = " ".join(retrieved_chunks)
+        
+        # Generate answer from the model
+        answer = mistral_answer(query, context)
+        
+        # Display the answer
         st.text_area("Answer:", answer, height=200)
 
-if __name__ == "__main__":
+# Run Streamlit app
+if __name__ == '__main__':
     streamlit_app()
