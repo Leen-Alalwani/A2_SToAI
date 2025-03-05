@@ -17,7 +17,7 @@ st.set_page_config(page_title="UDST Policy Assistant", page_icon="🧠", layout=
 
 # Initialize session state
 if 'api_key' not in st.session_state:
-    st.session_state.api_key = os.getenv("MISTRAL_API_KEY", "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
+    st.session_state.api_key = os.getenv("MISTRAL_API_KEY", "")
 if 'chunks' not in st.session_state:
     st.session_state.chunks = []
 if 'sources' not in st.session_state:
@@ -42,13 +42,18 @@ def get_text_embedding(list_txt_chunks, batch_size=10):
     return all_embeddings
 
 def load_policy(url):
-    response = requests.get(url)
-    html_doc = response.text
-    soup = BeautifulSoup(html_doc, "html.parser")
-    text = soup.get_text()
-    chunk_size = 512
-    chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-    return chunks
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        html_doc = response.text
+        soup = BeautifulSoup(html_doc, "html.parser")
+        text = soup.get_text()
+        chunk_size = 512
+        chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+        return chunks
+    except Exception as e:
+        st.error(f"Error loading policy: {e}")
+        return []
 
 def create_index(chunks):
     embeddings = get_text_embedding(chunks)
@@ -98,13 +103,15 @@ def display_sidebar():
         sources = [
             ("Sport and Wellness", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/sport-and-wellness-facilities-and"),
             ("Attendance Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-attendance-policy"),
-            
         ]
         selected_policy = st.selectbox("Select a policy:", options=list(zip(*sources))[1])
         if st.button("Load Policy"):
             st.session_state.chunks = load_policy(selected_policy)
-            st.session_state.index = create_index(st.session_state.chunks)
-            st.success("Policy loaded successfully.")
+            if st.session_state.chunks:
+                st.session_state.index = create_index(st.session_state.chunks)
+                st.success("Policy loaded successfully.")
+            else:
+                st.error("Failed to load policy.")
 
         st.divider()
         if st.button("🗑️ Clear Chat History"):
