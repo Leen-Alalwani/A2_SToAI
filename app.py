@@ -1,94 +1,104 @@
+import streamlit as st
+import os
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
-import faiss
-import os
 from mistralai import Mistral
+import faiss
 
-# ✅ Set up API Key
-MISTRAL_API_KEY = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"  # Replace with your actual key
-os.environ["MISTRAL_API_KEY"] = MISTRAL_API_KEY
+# Set up your Mistral API key
+api_key = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
+os.environ["MISTRAL_API_KEY"] = api_key
 
-# ✅ Initialize Mistral Client
-client = Mistral(api_key=MISTRAL_API_KEY)
-
-# ✅ List of UDST Policy URLs
-policy_urls = [
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-procedure",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members%E2%80%99-retention-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
-    "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"
-]
-
-# ✅ Function to fetch policy text from a given URL
+# Fetching and parsing policy data
 def fetch_policy_data(url):
     response = requests.get(url)
-    if response.status_code != 200:
-        print(f"⚠️ Failed to retrieve policy data from {url}")
-        return ""
-
-    soup = BeautifulSoup(response.text, "html.parser")
+    html_doc = response.text
+    soup = BeautifulSoup(html_doc, "html.parser")
     tag = soup.find("div")
-    return tag.text.strip() if tag else "⚠️ Policy content not found."
+    text = tag.text.strip() if tag else "Policy content not found."
+    return text
 
-# ✅ Chunk text into smaller parts (for embedding)
+# Chunking function to break text into smaller parts
 def chunk_text(text, chunk_size=512):
-    return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
-# ✅ Get embeddings using Mistral
-def get_text_embedding(text_chunks):
-    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=text_chunks)
+# Get embeddings for text chunks
+def get_text_embedding(list_txt_chunks):
+    client = Mistral(api_key=api_key)
+    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
     return embeddings_batch_response.data
 
-# ✅ Create FAISS index for searching policy chunks
+# Initialize FAISS index
 def create_faiss_index(embeddings):
-    d = len(embeddings[0].embedding)  # Embedding dimension
+    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
+    d = embedding_vectors.shape[1]  # embedding size
     index = faiss.IndexFlatL2(d)
-    embedding_vectors = np.array([emb.embedding for emb in embeddings])
-    index.add(embedding_vectors)
-    return index
+    faiss_index = faiss.IndexIDMap(index)
+    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
+    return faiss_index
 
-# ✅ Search FAISS for the most relevant policy chunks
-def search_relevant_chunks(index, query_embedding, k=2):
-    D, I = index.search(query_embedding, k)
-    return I.flatten()
+# Search for relevant chunks
+def search_relevant_chunks(faiss_index, query_embedding, k=2):
+    D, I = faiss_index.search(query_embedding, k)
+    return I
 
-# ✅ Main Execution
-if __name__ == "__main__":
-    all_chunks = []  # Stores all text chunks from multiple policies
-    all_chunk_sources = []  # Tracks the source of each chunk
+# Generate answer from Mistral
+def mistral_answer(query, context):
+    prompt = f"""
+    Context information is below.
+    ---------------------
+    {context}
+    ---------------------
+    Given the context information and not prior knowledge, answer the query.
+    Query: {query}
+    Answer:
+    """
+    client = Mistral(api_key=api_key)
+    messages = [{"role": "user", "content": prompt}]
+    chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
+    return chat_response.choices[0].message.content
 
-    # ✅ Process all policies
-    for url in policy_urls:
-        print(f"📌 Fetching policy from: {url}")
-        policy_text = fetch_policy_data(url)
+# Streamlit Interface
+def streamlit_app():
+    st.title('UDST Policies Q&A')
 
-        if policy_text:  # Proceed only if valid text is found
-            chunks = chunk_text(policy_text)
-            all_chunks.extend(chunks)
-            all_chunk_sources.extend([url] * len(chunks))  # Track the source of each chunk
+    policies = [
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-procedure",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members-retention-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"
+    ]
 
-    # ✅ Generate embeddings and create FAISS index
-    text_embeddings = get_text_embedding(all_chunks)
-    faiss_index = create_faiss_index(text_embeddings)
+    selected_policy_url = st.selectbox('Select a Policy', policies)
+    
+    # Fetch policy data and chunk it
+    policy_text = fetch_policy_data(selected_policy_url)
+    chunks = chunk_text(policy_text)
+    
+    # Generate embeddings for the chunks and create a FAISS index
+    embeddings = get_text_embedding(chunks)
+    faiss_index = create_faiss_index(embeddings)
+    
+    # Input box for query
+    query = st.text_input("Enter your Query:")
+    
+    if query:
+        query_embedding = np.array([get_text_embedding([query])[0].embedding])
+        I = search_relevant_chunks(faiss_index, query_embedding, k=2)
+        retrieved_chunks = [chunks[i] for i in I.tolist()[0]]
+        context = " ".join(retrieved_chunks)
+        
+        answer = mistral_answer(query, context)
+        
+        st.text_area("Answer:", answer, height=200)
 
-    # ✅ Example Query
-    question = "What is the attendance policy for students at UDST?"
-    question_embedding = np.array([get_text_embedding([question])[0].embedding])
+if __name__ == '__main__':
+    streamlit_app()
 
-    # Retrieve relevant chunks
-    relevant_chunk_ids = search_relevant_chunks(faiss_index, question_embedding)
-    retrieved_chunks = [all_chunks[i] for i in relevant_chunk_ids]
-    retrieved_sources = [all_chunk_sources[i] for i in relevant_chunk_ids]
-
-    # ✅ Display retrieved policy information
-    print("\n📌 Retrieved Policy Info:")
-    for i in range(len(retrieved_chunks)):
-        print(f"\n🔹 **Source:** {retrieved_sources[i]}")
-        print(f"🔹 **Extracted Policy Info:** {retrieved_chunks[i][:500]}...")  # Display first 500 characters
