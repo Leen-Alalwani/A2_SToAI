@@ -7,8 +7,8 @@ from mistralai import Mistral
 import faiss
 
 # Set up your Mistral API key
-api_key = "liU22SqhcuY6W5ckIPxOzcm4yro1CJLX"
-os.environ["MISTRAL_API_KEY"] = api_key
+os.environ["MISTRAL_API_KEY"] = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
+api_key = os.getenv("MISTRAL_API_KEY")
 
 # Fetching and parsing policy data
 def fetch_policy_data(url):
@@ -31,17 +31,16 @@ def get_text_embedding(list_txt_chunks):
 
 # Initialize FAISS index
 def create_faiss_index(embeddings):
-    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
-    d = embedding_vectors.shape[1]
+    d = len(embeddings[0].embedding)
     index = faiss.IndexFlatL2(d)
-    faiss_index = faiss.IndexIDMap(index)
-    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
-    return faiss_index
+    index.add(np.array([emb.embedding for emb in embeddings]))
+    return index
 
 # Search for the most relevant chunks based on query embedding
 def search_relevant_chunks(faiss_index, query_embedding, k=2):
     D, I = faiss_index.search(query_embedding, k)
     return I
+
 
 # Mistral model to generate answers based on context
 def mistral_answer(query, context):
@@ -64,17 +63,39 @@ def streamlit_app():
     st.title('UDST Policies Q&A')
 
     # List of policy URLs
+     # List of policies with descriptive names
     policies = [
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-procedure",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members%E2%80%99-retention-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"
+        ("Registration Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy"),
+        ("Examination Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/examination-policy"),
+        ("Graduation Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduation-policy"),
+        ("Admissions Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/admissions-policy"),
+        ("Transfer Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/transfer-policy"),
+        ("International Student Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/international-student-policy"),
+        ("Academic Standing Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-standing-policy"),
+        ("Intellectual Property Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy"),
+        ("Credit Hour Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy"),
+        ("Student Conduct Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-conduct-policy"),
+        ("Student Appeals Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-appeals-policy"),
+        ("Academic Appraisal Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy"),
+        ("Student Engagement Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/student-engagement-policy"),
+        ("Academic Credentials Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy"),
+        ("Graduate Admissions Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/graduate-admissions-policy"),
+        ("Student Attendance Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-attendance-policy"),
+        ("Final Grade Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/final-grade-policy"),
+        ("Academic Freedom Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy"),
+        ("Academic Qualifications Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy"),
+        ("Joint Appointment Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy"),
+        ("Program Accreditation Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/program-accreditation-policy"),
+        ("Academic Schedule Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/academic-schedule-policy"),
+        ("Graduate Academic Standing Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduate-academic-standing-policy"),
+        ("Academic Members’ Retention Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members%E2%80%99-retention-policy"),
+        ("Academic Professional Development", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-professional-development"),
+        ("Academic Annual Leave Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy"),
+        ("Graduate Final Grade Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduate-final-grade-policy"),
+        ("Student Counselling Services Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/student-counselling-services-policy"),
+        ("Scholarship and Financial Assistance", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/scholarship-and-financial-assistance"),
+        ("Use of Library Space Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/use-library-space-policy"),
+        ("Sport and Wellness Facilities", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/sport-and-wellness-facilities-and")
     ]
 
     # Select a policy from the list
