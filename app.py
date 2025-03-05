@@ -67,7 +67,8 @@ def streamlit_app():
 
     # List of policy URLs
      # List of policies with descriptive names
-     policies = [
+
+policies = [
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy",
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/examination-policy",
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduation-policy",
