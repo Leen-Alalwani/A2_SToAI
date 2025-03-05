@@ -84,5 +84,6 @@ def streamlit_app():
         answer = mistral_answer(query, context) if context else "I couldn't find relevant information."
         st.text_area("Answer:", answer, height=200)
 
+
 if __name__ == "__main__":
     streamlit_app()
