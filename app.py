@@ -7,7 +7,7 @@ import faiss
 from mistralai import Mistral
 
 # Set up Mistral API key
-api_key = os.getenv("MISTRAL_API_KEY", "Use Your Own Key")
+api_key = os.getenv("MISTRAL_API_KEY", "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
 
 # Function to fetch and parse policy text
 def fetch_policy_data(url):
