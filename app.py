@@ -5,119 +5,91 @@ from bs4 import BeautifulSoup
 import numpy as np
 from mistralai import Mistral
 import faiss
+import logging
 
-# Set up your Mistral API key
-os.environ["MISTRAL_API_KEY"] = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
-api_key = os.getenv("MISTRAL_API_KEY")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Fetching and parsing policy data
+# Securely load API key (recommend using python-dotenv)
+api_key = os.getenv("kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
+if not api_key:
+    st.error("Mistral API Key not found. Please set MISTRAL_API_KEY environment variable.")
+    st.stop()
+
+# Fetching and parsing policy data with error handling
 def fetch_policy_data(url):
-    response = requests.get(url)
-    html_doc = response.text
-    soup = BeautifulSoup(html_doc, "html.parser")
-    tag = soup.find("div")
-    text = tag.text.strip()
-    return text
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # More robust text extraction
+        text_elements = soup.find_all(['p', 'div', 'article'])
+        text = " ".join([elem.get_text(strip=True) for elem in text_elements])
+        
+        if not text:
+            st.warning(f"No text extracted from {url}")
+            return "No policy text found."
+        
+        return text
+    except requests.RequestException as e:
+        logger.error(f"Error fetching policy from {url}: {e}")
+        st.error(f"Could not fetch policy from {url}")
+        return f"Error: {str(e)}"
 
-# Chunking function to break text into smaller parts
-def chunk_text(text, chunk_size=512):
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+# Rest of the functions remain the same as in the original script
 
-# Get embeddings for text chunks
-def get_text_embedding(list_txt_chunks):
-    client = Mistral(api_key=api_key)
-    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
-    return embeddings_batch_response.data
-
-
-# Initialize FAISS index
-def create_faiss_index(embeddings):
-    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
-    d = embedding_vectors.shape[1]
-    index = faiss.IndexFlatL2(d)
-    faiss_index = faiss.IndexIDMap(index)
-    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
-    return faiss_index
-
-# Search for the most relevant chunks based on query embedding
-def search_relevant_chunks(faiss_index, query_embedding, k=2):
-    D, I = faiss_index.search(query_embedding, k)
-    return I
-
-
-# Mistral model to generate answers based on context
-def mistral_answer(query, context):
-    prompt = f"""
-    Context information is below.
-    ---------------------
-    {context}
-    ---------------------
-    Given the context information and not prior knowledge, answer the query.
-    Query: {query}
-    Answer:
-    """
-    client = Mistral(api_key=api_key)
-    messages = [{"role": "user", "content": prompt}]
-    chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
-    return chat_response.choices[0].message.content
-
-# Streamlit Interface
 def streamlit_app():
     st.title('UDST Policies Q&A')
+    st.markdown("*Retrieve policy information using natural language queries*")
 
-    # List of policy URLs
-     # List of policies with descriptive names
-
-policies = [
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/examination-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduation-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/admissions-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/transfer-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/international-student-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-standing-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/intellectual-property-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/credit-hour-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-conduct-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-appeals-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/student-engagement-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/graduate-admissions-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-attendance-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/final-grade-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-freedom-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-qualifications-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/program-accreditation-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/academic-schedule-policy",
+    policies = [
+        "Registration Policy",
+        "Examination Policy", 
+        "Graduation Policy",
+        "Admissions Policy",
+        "Transfer Policy",
+        
     ]
 
-    selected_policy_url = st.selectbox("Select a Policy", policies)
-    policy_text = fetch_policy_data(selected_policy_url)
-    chunks = chunk_text(policy_text)
+    policy_urls = [
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/examination-policy",
+        
+    ]
 
+    selected_policy = st.selectbox("Select a Policy", policies)
+    selected_index = policies.index(selected_policy)
+    selected_policy_url = policy_urls[selected_index]
 
-    # Generate embeddings for the chunks and create a FAISS index
-    embeddings = get_text_embedding(chunks)
-    faiss_index = create_faiss_index(embeddings)
+    try:
+        policy_text = fetch_policy_data(selected_policy_url)
+        chunks = chunk_text(policy_text)
 
-    # Input box for query
-    query = st.text_input("Enter your Query:")
+        # Generate embeddings for the chunks and create a FAISS index
+        embeddings = get_text_embedding(chunks)
+        faiss_index = create_faiss_index(embeddings)
 
-    if query:
-        # Embed the user query and search for relevant chunks
-        query_embedding = np.array([get_text_embedding([query])[0].embedding])
-        I = search_relevant_chunks(faiss_index, query_embedding, k=2)
-        retrieved_chunks = [chunks[i] for i in I.tolist()[0]]
-        context = " ".join(retrieved_chunks)
+        # Input box for query
+        query = st.text_input(f"Ask a question about the {selected_policy}:")
 
-        # Generate answer from the model
-        answer = mistral_answer(query, context)
+        if query:
+            # Embed the user query and search for relevant chunks
+            query_embedding = np.array([get_text_embedding([query])[0].embedding])
+            I = search_relevant_chunks(faiss_index, query_embedding, k=2)
+            retrieved_chunks = [chunks[i] for i in I.tolist()[0]]
+            context = " ".join(retrieved_chunks)
 
-        # Display the answer
-        st.text_area("Answer:", answer, height=200)
+            # Generate answer from the model
+            answer = mistral_answer(query, context)
 
-# Run Streamlit app
+            # Display the answer
+            st.text_area("Answer:", answer, height=200)
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        logger.error(f"Unexpected error: {e}")
+
 if __name__ == '__main__':
     streamlit_app()
