@@ -29,12 +29,15 @@ def get_text_embedding(list_txt_chunks):
     embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
     return embeddings_batch_response.data
 
+
 # Initialize FAISS index
 def create_faiss_index(embeddings):
-    d = len(embeddings[0].embedding)
+    embedding_vectors = np.array([embedding.embedding for embedding in embeddings])
+    d = embedding_vectors.shape[1]
     index = faiss.IndexFlatL2(d)
-    index.add(np.array([emb.embedding for emb in embeddings]))
-    return index
+    faiss_index = faiss.IndexIDMap(index)
+    faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
+    return faiss_index
 
 # Search for the most relevant chunks based on query embedding
 def search_relevant_chunks(faiss_index, query_embedding, k=2):
