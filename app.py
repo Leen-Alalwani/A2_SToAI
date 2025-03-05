@@ -1,89 +1,130 @@
 import streamlit as st
-import os
-import requests
-from bs4 import BeautifulSoup
 import numpy as np
 import faiss
-from mistralai import Mistral
+import os
+import pickle
+from mistralai import Mistral, UserMessage
+import dotenv
 
-# Set up Mistral API key
-api_key = os.getenv("MISTRAL_API_KEY", "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m")
+# Load environment variables
+dotenv.load_dotenv()
 
-# Function to fetch and parse policy text
-def fetch_policy_data(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
-    tag = soup.find("div")
-    return tag.text.strip() if tag else "Policy content not found."
+# Page configuration
+st.set_page_config(page_title="RAG Knowledge Assistant", page_icon="🧠", layout="wide")
 
-# Function to chunk text
-def chunk_text(text, chunk_size=512):
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+# Initialize session state
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = os.getenv("MISTRAL_API_KEY", "")
+if 'chunks' not in st.session_state:
+    st.session_state.chunks = []
+if 'sources' not in st.session_state:
+    st.session_state.sources = []
+if 'index' not in st.session_state:
+    st.session_state.index = None
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
 
-# Get embeddings
 def get_text_embedding(list_txt_chunks):
-    client = Mistral(api_key=api_key)
-    embeddings_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
-    return [e.embedding for e in embeddings_response.data]
+    client = Mistral(api_key=st.session_state.api_key)
+    embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
+    return embeddings_batch_response.data
 
-# Create FAISS index
-def create_faiss_index(embeddings):
-    if not embeddings:
-        return None  # Prevent crashes if no embeddings
-    d = len(embeddings[0])
-    index = faiss.IndexFlatL2(d)
-    index.add(np.array(embeddings))
-    return index
+def load_existing_index():
+    try:
+        index = faiss.read_index("assets/rag_index.faiss")
+        with open("assets/rag_data.pkl", "rb") as f:
+            data = pickle.load(f)
+        st.session_state.chunks = data["chunks"]
+        st.session_state.sources = data["sources"]
+        st.session_state.index = index
+        st.success("Successfully loaded existing knowledge base.")
+        return True
+    except Exception as e:
+        st.error(f"Failed to load existing index: {e}")
+        return False
 
-# Retrieve relevant chunks
-def search_relevant_chunks(faiss_index, query_embedding, k=2):
-    if not faiss_index:
-        return []  # Handle missing index
-    D, I = faiss_index.search(query_embedding, k)
-    return I[0]
+def rag_query(question, k=3):
+    if not st.session_state.index or not st.session_state.chunks:
+        return "Knowledge Base Not Loaded", ""
 
-# Generate AI response
-def mistral_answer(query, context):
-    prompt = f"""
-    Context:
-    {context}
-    
-    Given the context, answer the query:
-    {query}
-    """
-    client = Mistral(api_key=api_key)
-    response = client.chat.complete(model="mistral-large-latest", messages=[{"role": "user", "content": prompt}])
-    return response.choices[0].message.content
+    question_embeddings = get_text_embedding([question])
+    if not question_embeddings or question_embeddings[0] is None:
+        return "Error: Could not generate embeddings for the question.", ""
 
-# Streamlit App
-def streamlit_app():
-    st.title("UDST Policy Chatbot")
+    query_embedding = np.array([question_embeddings[0].embedding])
+    D, I = st.session_state.index.search(query_embedding, k=k)
+    retrieved_chunks = [st.session_state.chunks[i] for i in I.tolist()[0]]
 
-    policies = [
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-appraisal-policy",
-        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-credentials-policy"
-    ]
+    context = "\n---\n".join(retrieved_chunks)
+    prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
 
-    selected_policy_url = st.selectbox("Select a Policy", policies)
-    policy_text = fetch_policy_data(selected_policy_url)
-    chunks = chunk_text(policy_text)
+    client = Mistral(api_key=st.session_state.api_key)
+    messages = [UserMessage(content=prompt)]
+    try:
+        chat_response = client.chat.complete(model="mistral-large-latest", messages=messages)
+        response = chat_response.choices[0].message.content
+    except Exception as e:
+        response = f"Error generating response: {str(e)}"
 
-    if not chunks:
-        st.error("No policy data available.")
-        return
+    return response, context
 
-    embeddings = get_text_embedding(chunks)
-    faiss_index = create_faiss_index(embeddings)
-    query = st.text_input("Enter your question:")
+def display_sidebar():
+    with st.sidebar:
+        st.image("https://www.udst.edu.qa/themes/custom/cnaq/logo.png", width=200)
+        st.title("📚 Config")
 
-    if query:
-        query_embedding = np.array([get_text_embedding([query])[0]])
-        indices = search_relevant_chunks(faiss_index, query_embedding)
-        context = " ".join([chunks[i] for i in indices]) if indices else "No relevant context found."
-        answer = mistral_answer(query, context) if context else "I couldn't find relevant information."
-        st.text_area("Answer:", answer, height=200)
+        api_key = st.text_input("Mistral API Key", value=st.session_state.api_key, type="password")
+        if api_key != st.session_state.api_key:
+            st.session_state.api_key = api_key
 
+        st.divider()
+        st.subheader("Knowledge Sources")
+        sources = [
+            ("Sport and Wellness", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/sport-and-wellness-facilities-and"),
+            ("Attendance Policy", "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/student-attendance-policy"),
+            # Add more sources as needed
+        ]
+        for description, url in sources:
+            st.markdown(f"[{description}]({url})")
+
+        st.divider()
+        if st.button("🗑️ Clear Chat History"):
+            st.session_state.chat_history = []
+            st.rerun()
+
+def main():
+    display_sidebar()
+    load_existing_index()
+
+    st.markdown("# 🧠 RAG Knowledge Assistant")
+    st.markdown("Welcome to the RAG Knowledge Assistant! Ask questions below.")
+
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message.get("context") and message["role"] == "assistant":
+                with st.expander("View retrieved context"):
+                    st.markdown(message["context"])
+
+    user_question = st.chat_input("Ask a question about university policies...")
+    if user_question:
+        st.session_state.chat_history.append({"role": "user", "content": user_question})
+        with st.chat_message("user"):
+            st.markdown(user_question)
+
+        with st.chat_message("assistant"):
+            if not st.session_state.api_key:
+                response = "Please enter your Mistral API key in the sidebar."
+            elif not st.session_state.index:
+                response = "Please add knowledge sources before asking questions."
+            else:
+                response, context = rag_query(user_question)
+                st.markdown(response)
+                if context:
+                    with st.expander("View retrieved context"):
+                        st.markdown(context)
+
+            st.session_state.chat_history.append({"role": "assistant", "content": response, "context": context})
 
 if __name__ == "__main__":
-    streamlit_app()
+    main()
