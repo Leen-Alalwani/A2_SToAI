@@ -67,7 +67,7 @@ def streamlit_app():
 
     # List of policy URLs
      # List of policies with descriptive names
-    policies = [
+    policies = {
         ("Registration Policy": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy"),
         ("Examination Policy": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/examination-policy"),
         ("Graduation Policy": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduation-policy"),
@@ -99,7 +99,7 @@ def streamlit_app():
         ("Scholarship and Financial Assistance": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/scholarship-and-financial-assistance"),
         ("Use of Library Space Policy": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/use-library-space-policy"),
         ("Sport and Wellness Facilities": "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/sport-and-wellness-facilities-and")
-    ]
+    }
 
     # Select a policy from the list
     selected_policy_url = st.selectbox('Select a Policy', policies)
