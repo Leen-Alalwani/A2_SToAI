@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import numpy as np
 from mistralai import Mistral
 import faiss
+import time
 
 
 # Set up your Mistral API key
@@ -27,6 +28,7 @@ def chunk_text(text, chunk_size=512):
 # Get embeddings for text chunks
 def get_text_embedding(list_txt_chunks):
     client = Mistral(api_key=api_key)
+    time.sleep(1)  
     embeddings_batch_response = client.embeddings.create(model="mistral-embed", inputs=list_txt_chunks)
     return embeddings_batch_response.data
 
