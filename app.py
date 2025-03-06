@@ -96,9 +96,18 @@ def streamlit_app():
         "Academic Qualifications Policy",
         "Joint Appointment Policy",
         "Program Accreditation Policy",
-        "Academic Schedule Policy"
+        "Academic Schedule Policy",
+        "Graduate Academic Standing Policy",
+        "Academic Members’ Retention Policy",
+        "Academic Professional Development Policy",
+        "Academic Annual Leave Policy",
+        "Graduate Final Grade Policy",
+        "Student Counselling Services Policy",
+        "Scholarship and Financial Assistance Policy",
+        "Use of Library Space Policy",
+        "Sport and Wellness Facilities Policy"
     ]
-
+    
     # Corresponding policy URLs
     policy_urls = [
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/registration-policy",
@@ -123,7 +132,17 @@ def streamlit_app():
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/joint-appointment-policy",
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/program-accreditation-policy",
         "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/academic-schedule-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/graduate-academic-standing-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-members%E2%80%99-retention-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-professional-development",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/academic-annual-leave-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/graduate-final-grade-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/udst-policies-and-procedures/student-counselling-services-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/scholarship-and-financial-assistance",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/use-library-space-policy",
+        "https://www.udst.edu.qa/about-udst/institutional-excellence-ie/policies-and-procedures/sport-and-wellness-facilities-and"
     ]
+
 
     # Create a dropdown for policy selection
     selected_policy = st.selectbox("Select a Policy", policies)
