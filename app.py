@@ -6,9 +6,10 @@ import numpy as np
 from mistralai import Mistral
 import faiss
 
+
 # Set up your Mistral API key
-os.environ["MISTRAL_API_KEY"] = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
-api_key = os.getenv("MISTRAL_API_KEY")
+api_key = "kOCiq0K2qXcwVxhh8vKRaC7POzJ5Un2m"
+os.environ["MISTRAL_API_KEY"] = api_key
 
 # Fetching and parsing policy data
 def fetch_policy_data(url):
