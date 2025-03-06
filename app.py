@@ -64,7 +64,14 @@ def mistral_answer(query, context):
 
 # Streamlit Interface
 def streamlit_app():
-    st.title('UDST Policies Q&A')
+    st.markdown(
+        "<h1 style='color: #ffb8ff; text-align: center;'>UDST Policies</h1>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        "<h3 style='color: #b8ceff; text-align: center;'>Find answers to your policy-related questions</h3>",
+        unsafe_allow_html=True
+    )
 
     # List of policies with descriptive names
     policies = [
@@ -135,7 +142,7 @@ def streamlit_app():
     faiss_index = create_faiss_index(embeddings)
     
     # Input box for query
-    query = st.text_input("Enter your Query:")
+    query = st.text_input("Enter your Question:")
     
     if query:
         # Embed the user query and search for relevant chunks
