@@ -8,11 +8,11 @@ import faiss
 import time
 
 
-# Set up your Mistral API key
+# Load API key
 api_key = "Mf68U1bM70DhyvpaOmPMjSyIejTJjpzt"
 os.environ["MISTRAL_API_KEY"] = api_key
 
-# Fetching and parsing policy data
+# Fetching and parsing data
 def fetch_policy_data(url):
     response = requests.get(url)
     html_doc = response.text
@@ -21,11 +21,11 @@ def fetch_policy_data(url):
     text = tag.text.strip()
     return text
 
-# Chunking function to break text into smaller parts
+# Chunking function to split text into smaller parts
 def chunk_text(text, chunk_size=512):
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
-# Get embeddings for text chunks
+# Get embeddings of the chunks
 def get_text_embedding(list_txt_chunks):
     client = Mistral(api_key=api_key)
     time.sleep(1)  
@@ -41,7 +41,7 @@ def create_faiss_index(embeddings):
     faiss_index.add_with_ids(embedding_vectors, np.array(range(len(embedding_vectors))))
     return faiss_index
 
-# Search for the most relevant chunks based on query embedding
+# Search for chunks that are similar to the query
 def search_relevant_chunks(faiss_index, query_embedding, k=2):
     D, I = faiss_index.search(query_embedding, k)
     return I
@@ -73,7 +73,7 @@ def streamlit_app():
         unsafe_allow_html=True
     )
 
-    # List of policies with descriptive names
+    # List of policies with clear and descriptive titles
     policies = [
         "Registration Policy",
         "Examination Policy",
@@ -144,7 +144,7 @@ def streamlit_app():
     ]
 
 
-    # Create a dropdown for policy selection
+    # Dropdown for choosing a policy
     selected_policy = st.selectbox("Select a Policy", policies)
     
     # Find the corresponding URL for the selected policy
